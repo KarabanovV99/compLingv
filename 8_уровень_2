@@ -1,0 +1,178 @@
+Уровень 2
+
+Создадим бота, составляющего расписание с напоминаниями
+
+Import asyncio
+
+From aiogram import Bot, Dispatcher, types
+
+From aiogram.contrib.middlewares.logging import LoggingMiddleware
+
+From aiogram.dispatcher import FSMContext
+
+From aiogram.dispatcher.filters.state import State, StatesGroup
+
+From aiogram.dispatcher.filters import Command
+
+From aiogram.types import ParseMode
+
+From aiogram.utils import executor
+
+
+
+From config import TOKEN
+
+
+
+# Замените 'YOUR_TOKEN' на ваш токен от BotFather
+
+API_TOKEN = TOKEN
+
+
+
+# Инициализация бота и диспетчера
+
+Bot = Bot(token=API_TOKEN)
+
+Dp = Dispatcher(bot)
+
+Dp.middleware.setup(LoggingMiddleware())
+
+
+
+
+
+# Состояния для FSM
+
+Class ScheduleStates(StatesGroup):
+
+    Waiting_for_task = State()
+
+    Waiting_for_time = State()
+
+
+
+
+
+Async def remind_task(task, time, chat_id):
+
+    Await asyncio.sleep(time – asyncio.get_event_loop().time())
+
+    Await bot.send_message(chat_id, f»Напоминаю о задаче '{task}'»)
+
+
+
+
+
+@dp.message_handler(commands=['start'])
+
+Async def cmd_start(message: types.Message):
+
+    Await message.reply(«Привет! Я помогу тебе составить расписание дня. «
+
+                        «Пожалуйста, отправь мне задачу для добавления в расписание.»)
+
+
+
+
+
+@dp.message_handler(Command(«schedule»))
+
+Async def cmd_schedule(message: types.Message):
+
+    Await message.reply(«Чтобы добавить задачу в расписание, отправь мне ее описание.»)
+
+
+
+
+
+@dp.message_handler(state=None)
+
+Async def process_message(message: types.Message):
+
+    Await ScheduleStates.waiting_for_task.set()
+
+    Await message.reply(«Теперь отправь мне время, когда нужно выполнить эту задачу в формате HH:MM»)
+
+
+
+
+
+@dp.message_handler(state=ScheduleStates.waiting_for_task)
+
+Async def process_task(message: types.Message, state: FSMContext):
+
+    Async with state.proxy() as data:
+
+        Data['task'] = message.text
+
+    Await ScheduleStates.next()
+
+    Await message.reply(«Отлично! Теперь отправь мне время, когда нужно выполнить эту задачу в формате HH:MM»)
+
+
+
+
+
+@dp.message_handler(state=ScheduleStates.waiting_for_time)
+
+Async def process_time(message: types.Message, state: FSMContext):
+
+    Try:
+
+        Time = message.text
+
+        Task = (await state.get_data())['task']
+
+        Await message.reply(f»Задача '{task}' запланирована на {time}»)
+
+
+
+        # Разбиваем время на часы и минуты
+
+        Hours, minutes = map(int, time.split(':'))
+
+        Current_time = asyncio.get_event_loop().time()
+
+        Task_time = current_time + hours * 3600 + minutes * 60
+
+
+
+        # Получаем id чата для отправки напоминания
+
+        Chat_id = message.chat.id
+
+
+
+        # Запускаем асинхронный таймер для напоминания о задаче
+
+        Asyncio.create_task(remind_task(task, task_time, chat_id))
+
+
+
+    Except Exception as e:
+
+        Await message.reply(«Произошла ошибка при обработке времени. Пожалуйста, попробуйте еще раз.»)
+
+
+
+    Finally:
+
+        Await state.finish()
+
+
+
+
+
+If __name__ == '__main__':
+
+    Executor.start_polling(dp, skip_updates=True)
+
+
+
+
+
+ 
+
+
+
